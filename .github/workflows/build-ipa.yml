@@ -1,0 +1,147 @@
+name: Build Unsigned Teleprompter iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-ipa:
+    runs-on: macos-14
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Unpack Project Archive
+        run: |
+          if [ -f "FlowPrompt_iOS_XcodeProject.zip" ]; then
+            unzip -o FlowPrompt_iOS_XcodeProject.zip
+          fi
+          if [ -d "FlowPrompt-iOS" ] && [ ! -d "FlowPrompt.xcodeproj" ]; then
+            cp -R FlowPrompt-iOS/* .
+          fi
+
+      - name: Prepare AppIcon Asset Catalog (iPhone & iPad All Sizes)
+        run: |
+          python3 - << 'PYEOF'
+          import os, json, subprocess
+          from pathlib import Path
+
+          iconset = Path("FlowPrompt/Assets.xcassets/AppIcon.appiconset")
+          iconset.mkdir(parents=True, exist_ok=True)
+          Path("FlowPrompt/Assets.xcassets/Contents.json").write_text(json.dumps({"info": {"author": "xcode", "version": 1}}, indent=2))
+
+          master_icon = iconset / "AppIcon.png"
+          if not master_icon.exists():
+              subprocess.run(["pip3", "install", "--quiet", "pillow"], check=False)
+              from PIL import Image, ImageDraw
+              img = Image.new("RGB", (1024, 1024), (8, 8, 12))
+              draw = ImageDraw.Draw(img)
+              draw.rounded_rectangle((140, 140, 884, 884), radius=220, fill=(22, 22, 30), outline=(255, 115, 20), width=18)
+              draw.line([(330, 440), (694, 440)], fill=(255, 115, 20), width=38)
+              draw.line([(330, 540), (630, 540)], fill=(250, 249, 246), width=38)
+              draw.line([(330, 640), (540, 640)], fill=(180, 180, 190), width=38)
+              draw.ellipse((484, 290, 540, 346), fill=(255, 107, 0))
+              img.save(master_icon, "PNG")
+
+          sizes = [
+              ("Icon-20@2x.png", 40, "20x20", "2x", "iphone"),
+              ("Icon-20@3x.png", 60, "20x20", "3x", "iphone"),
+              ("Icon-29@2x.png", 58, "29x29", "2x", "iphone"),
+              ("Icon-29@3x.png", 87, "29x29", "3x", "iphone"),
+              ("Icon-40@2x.png", 80, "40x40", "2x", "iphone"),
+              ("Icon-40@3x.png", 120, "40x40", "3x", "iphone"),
+              ("Icon-60@2x.png", 120, "60x60", "2x", "iphone"),
+              ("Icon-60@3x.png", 180, "60x60", "3x", "iphone"),
+              ("Icon-20~ipad.png", 20, "20x20", "1x", "ipad"),
+              ("Icon-20@2x~ipad.png", 40, "20x20", "2x", "ipad"),
+              ("Icon-29~ipad.png", 29, "29x29", "1x", "ipad"),
+              ("Icon-29@2x~ipad.png", 58, "29x29", "2x", "ipad"),
+              ("Icon-40~ipad.png", 40, "40x40", "1x", "ipad"),
+              ("Icon-40@2x~ipad.png", 80, "40x40", "2x", "ipad"),
+              ("Icon-76~ipad.png", 76, "76x76", "1x", "ipad"),
+              ("Icon-76@2x~ipad.png", 152, "76x76", "2x", "ipad"),
+              ("Icon-83.5@2x~ipad.png", 167, "83.5x83.5", "2x", "ipad"),
+              ("Icon-1024.png", 1024, "1024x1024", "1x", "ios-marketing"),
+          ]
+
+          images_json = []
+          for fname, px, pt_str, scale, idiom in sizes:
+              out_file = iconset / fname
+              subprocess.run(["sips", "-z", str(px), str(px), str(master_icon), "--out", str(out_file)], check=True)
+              images_json.append({
+                  "filename": fname,
+                  "idiom": idiom,
+                  "scale": scale,
+                  "size": pt_str
+              })
+
+          (iconset / "Contents.json").write_text(json.dumps({
+              "images": images_json,
+              "info": {"author": "xcode", "version": 1}
+          }, indent=2))
+          PYEOF
+
+      - name: Generate Xcode Project with Asset Catalog
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          xcodegen generate
+
+      - name: Compile Unsigned Release .app (arm64)
+        run: |
+          xcodebuild build \
+            -project FlowPrompt.xcodeproj \
+            -scheme FlowPrompt \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build_output \
+            ASSETCATALOG_COMPILER_APPICON_NAME=AppIcon \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Compile & Embed AppIcon into .app Bundle & Info.plist
+        run: |
+          APP_BUNDLE="build_output/Build/Products/Release-iphoneos/FlowPrompt.app"
+          xcrun actool FlowPrompt/Assets.xcassets \
+            --compile "$APP_BUNDLE" \
+            --platform iphoneos \
+            --minimum-deployment-target 16.0 \
+            --app-icon AppIcon \
+            --output-partial-info-plist build_output/assetcatalog_info.plist
+
+          /usr/libexec/PlistBuddy -c "Merge build_output/assetcatalog_info.plist" "$APP_BUNDLE/Info.plist" || true
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Teleprompter" "$APP_BUNDLE/Info.plist" || \
+          /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Teleprompter" "$APP_BUNDLE/Info.plist"
+
+          cp FlowPrompt/Assets.xcassets/AppIcon.appiconset/Icon-60@2x.png "$APP_BUNDLE/AppIcon60x60@2x.png"
+          cp FlowPrompt/Assets.xcassets/AppIcon.appiconset/Icon-60@3x.png "$APP_BUNDLE/AppIcon60x60@3x.png"
+          cp FlowPrompt/Assets.xcassets/AppIcon.appiconset/Icon-76@2x~ipad.png "$APP_BUNDLE/AppIcon76x76@2x~ipad.png"
+          cp FlowPrompt/Assets.xcassets/AppIcon.appiconset/Icon-83.5@2x~ipad.png "$APP_BUNDLE/AppIcon83.5x83.5@2x~ipad.png"
+
+      - name: Package Teleprompter-iOS-Universal.ipa
+        run: |
+          rm -rf Payload FlowPrompt-iOS-Universal.ipa
+          mkdir -p Payload
+          cp -R build_output/Build/Products/Release-iphoneos/FlowPrompt.app Payload/
+          zip -r9 FlowPrompt-iOS-Universal.ipa Payload
+
+      - name: Upload IPA to Workflow Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlowPrompt-iOS-Universal-IPA
+          path: FlowPrompt-iOS-Universal.ipa
+
+      - name: Publish Direct .ipa to GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete v0.0.1 --yes || true
+          gh release create v0.0.1 FlowPrompt-iOS-Universal.ipa \
+            --title "Teleprompter v0.0.1 (Universal iOS & iPadOS IPA)" \
+            --notes "Unsigned .ipa build with embedded iOS & iPadOS AppIcon for SideStore, AltStore, Sideloadly, and Feather."
