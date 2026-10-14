@@ -33,7 +33,7 @@ Created by **[muneebwanee](https://github.com/muneebwanee)**.
 
 ```text
 teleprompter/
-└── V0.0.1.zip
+└── FlowPrompt_iOS_XcodeProject.zip
   ├── FlowPrompt.xcodeproj/                  # Universal iOS & iPadOS 16.0+ Xcode Project
   ├── project.yml                            # XcodeGen project specification
   ├── build_ipa.sh                           # Local macOS script to build unsigned .ipa
@@ -68,7 +68,7 @@ teleprompter/
 ### Option 1 — Download Pre-Built `.ipa` from GitHub Releases (iPad / iPhone)
 
 1. Go to the **[Releases](../../releases)** page of this repository.
-2. Download **`V0.0.1.ipa`** from the latest `v0.0.1` release.
+2. Download **`FlowPrompt_iOS_XcodeProject.ipa`** from the latest `FlowPrompt_iOS_XcodeProject` release.
 3. Install the `.ipa` on your iPad or iPhone using:
    - **SideStore / AltStore / Feather** (On-device, no computer required)
    - **Sideloadly** (Windows / macOS)
@@ -77,7 +77,7 @@ teleprompter/
 
 1. Fork or push this repository to your GitHub account.
 2. Open the **Actions** tab and run the **Build Unsigned Teleprompter iOS IPA** workflow.
-3. GitHub Actions compiles the app on `macos-14`, generates and embeds all iPhone and iPad `AppIcon` sizes via `xcrun actool`, and publishes `V0.0.1.ipa` directly to **Releases**.
+3. GitHub Actions compiles the app on `macos-14`, generates and embeds all iPhone and iPad `AppIcon` sizes via `xcrun actool`, and publishes `FlowPrompt_iOS_XcodeProject.ipa` directly to **Releases**.
 
 ### Option 3 — Build Locally with Xcode (macOS)
 
