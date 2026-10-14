@@ -1,4 +1,4 @@
-name: Build Unsigned Teleprompter iOS IPA 
+name: Build Unsigned Teleprompter iOS IPA
 
 on:
   workflow_dispatch:
@@ -126,43 +126,7 @@ jobs:
               "images": images_json,
               "info": {"author": "xcode", "version": 1}
           }, indent=2))
-
-          project_yml_lines = [
-              "name: FlowPrompt",
-              "options:",
-              "  bundleIdPrefix: com.muneebwanee",
-              "  deploymentTarget:",
-              '    iOS: "16.0"',
-              "targets:",
-              "  FlowPrompt:",
-              "    type: application",
-              "    platform: iOS",
-              '    deploymentTarget: "16.0"',
-              "    sources:",
-              "      - path: FlowPrompt",
-              "    info:",
-              "      path: FlowPrompt/Info.plist",
-              "    settings:",
-              "      base:",
-              "        PRODUCT_BUNDLE_IDENTIFIER: com.muneebwanee.teleprompter",
-              "        PRODUCT_NAME: FlowPrompt",
-              "        INFOPLIST_KEY_CFBundleDisplayName: Teleprompter",
-              "        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon",
-              "        MARKETING_VERSION: 0.0.1",
-              "        CURRENT_PROJECT_VERSION: 1",
-              '        TARGETED_DEVICE_FAMILY: "1,2"',
-              '        SWIFT_VERSION: "5.9"',
-              ""
-          ]
-          Path("project.yml").write_text("\n".join(project_yml_lines))
           PYEOF
-
-      - name: Generate Xcode Project with Asset Catalog
-        run: |
-          if ! command -v xcodegen >/dev/null 2>&1; then
-            brew install xcodegen
-          fi
-          xcodegen generate
 
       - name: Compile Unsigned Release .app (arm64)
         run: |
@@ -173,6 +137,8 @@ jobs:
             -sdk iphoneos \
             -derivedDataPath build_output \
             ASSETCATALOG_COMPILER_APPICON_NAME=AppIcon \
+            INFOPLIST_KEY_CFBundleDisplayName=Teleprompter \
+            MARKETING_VERSION=0.0.1 \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
