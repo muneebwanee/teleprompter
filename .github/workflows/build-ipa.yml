@@ -17,10 +17,14 @@ jobs:
 
       - name: Unpack Project Archive
         run: |
-          if [ -f "FlowPrompt_iOS_XcodeProject.zip" ]; then
+          if [ -f "Teleprompter_iOS_XcodeProject.zip" ]; then
+            unzip -o Teleprompter_iOS_XcodeProject.zip
+          elif [ -f "FlowPrompt_iOS_XcodeProject.zip" ]; then
             unzip -o FlowPrompt_iOS_XcodeProject.zip
           fi
-          if [ -d "FlowPrompt-iOS" ]; then
+          if [ -d "Teleprompter-iOS" ]; then
+            cp -R Teleprompter-iOS/* .
+          elif [ -d "FlowPrompt-iOS" ]; then
             cp -R FlowPrompt-iOS/* .
           fi
 
@@ -30,9 +34,10 @@ jobs:
           import os, json, subprocess, zlib, struct, math
           from pathlib import Path
 
-          iconset = Path("FlowPrompt/Assets.xcassets/AppIcon.appiconset")
+          app_dir = Path("Teleprompter") if Path("Teleprompter").exists() else Path("FlowPrompt")
+          iconset = app_dir / "Assets.xcassets/AppIcon.appiconset"
           iconset.mkdir(parents=True, exist_ok=True)
-          Path("FlowPrompt/Assets.xcassets/Contents.json").write_text(
+          (app_dir / "Assets.xcassets/Contents.json").write_text(
               json.dumps({"info": {"author": "xcode", "version": 1}}, indent=2)
           )
 
@@ -128,11 +133,18 @@ jobs:
           }, indent=2))
           PYEOF
 
-      - name: Compile Unsigned Release .app (arm64)
+      - name: Compile Unsigned Release Teleprompter.app (arm64)
         run: |
+          if [ -d "Teleprompter.xcodeproj" ]; then
+            PROJ="Teleprompter.xcodeproj"
+            SCHEME="Teleprompter"
+          else
+            PROJ="FlowPrompt.xcodeproj"
+            SCHEME="FlowPrompt"
+          fi
           xcodebuild build \
-            -project FlowPrompt.xcodeproj \
-            -scheme FlowPrompt \
+            -project "$PROJ" \
+            -scheme "$SCHEME" \
             -configuration Release \
             -sdk iphoneos \
             -derivedDataPath build_output \
@@ -145,44 +157,56 @@ jobs:
 
       - name: Compile & Embed AppIcon into .app Bundle & Info.plist
         run: |
-          APP_BUNDLE="build_output/Build/Products/Release-iphoneos/FlowPrompt.app"
-          xcrun actool FlowPrompt/Assets.xcassets \
+          if [ -d "build_output/Build/Products/Release-iphoneos/Teleprompter.app" ]; then
+            APP_BUNDLE="build_output/Build/Products/Release-iphoneos/Teleprompter.app"
+          else
+            APP_BUNDLE="build_output/Build/Products/Release-iphoneos/FlowPrompt.app"
+          fi
+          if [ -d "Teleprompter/Assets.xcassets" ]; then
+            ASSETS_DIR="Teleprompter/Assets.xcassets"
+          else
+            ASSETS_DIR="FlowPrompt/Assets.xcassets"
+          fi
+
+          xcrun actool "$ASSETS_DIR" \
             --compile "$APP_BUNDLE" \
             --platform iphoneos \
             --minimum-deployment-target 16.0 \
             --app-icon AppIcon \
             --output-partial-info-plist build_output/assetcatalog_info.plist
 
-          # Merge generated CFBundleIcons into FlowPrompt.app/Info.plist
           /usr/libexec/PlistBuddy -c "Merge build_output/assetcatalog_info.plist" "$APP_BUNDLE/Info.plist" || true
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Teleprompter" "$APP_BUNDLE/Info.plist" || \
           /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Teleprompter" "$APP_BUNDLE/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 0.0.1" "$APP_BUNDLE/Info.plist" || true
 
-          # Copy fallback PNG icons directly into bundle root for Sideloadly / AltStore / SideStore / Feather
-          cp FlowPrompt/Assets.xcassets/AppIcon.appiconset/Icon-60@2x.png "$APP_BUNDLE/AppIcon60x60@2x.png"
-          cp FlowPrompt/Assets.xcassets/AppIcon.appiconset/Icon-60@3x.png "$APP_BUNDLE/AppIcon60x60@3x.png"
-          cp FlowPrompt/Assets.xcassets/AppIcon.appiconset/Icon-76@2x~ipad.png "$APP_BUNDLE/AppIcon76x76@2x~ipad.png"
-          cp FlowPrompt/Assets.xcassets/AppIcon.appiconset/Icon-83.5@2x~ipad.png "$APP_BUNDLE/AppIcon83.5x83.5@2x~ipad.png"
+          cp "$ASSETS_DIR/AppIcon.appiconset/Icon-60@2x.png" "$APP_BUNDLE/AppIcon60x60@2x.png"
+          cp "$ASSETS_DIR/AppIcon.appiconset/Icon-60@3x.png" "$APP_BUNDLE/AppIcon60x60@3x.png"
+          cp "$ASSETS_DIR/AppIcon.appiconset/Icon-76@2x~ipad.png" "$APP_BUNDLE/AppIcon76x76@2x~ipad.png"
+          cp "$ASSETS_DIR/AppIcon.appiconset/Icon-83.5@2x~ipad.png" "$APP_BUNDLE/AppIcon83.5x83.5@2x~ipad.png"
 
       - name: Package Teleprompter-iOS-Universal.ipa
         run: |
-          rm -rf Payload FlowPrompt-iOS-Universal.ipa
+          rm -rf Payload Teleprompter-iOS-Universal.ipa
           mkdir -p Payload
-          cp -R build_output/Build/Products/Release-iphoneos/FlowPrompt.app Payload/
-          zip -r9 FlowPrompt-iOS-Universal.ipa Payload
+          if [ -d "build_output/Build/Products/Release-iphoneos/Teleprompter.app" ]; then
+            cp -R build_output/Build/Products/Release-iphoneos/Teleprompter.app Payload/
+          else
+            cp -R build_output/Build/Products/Release-iphoneos/FlowPrompt.app Payload/Teleprompter.app
+          fi
+          zip -r9 Teleprompter-iOS-Universal.ipa Payload
 
       - name: Upload IPA to Workflow Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: FlowPrompt-iOS-Universal-IPA
-          path: FlowPrompt-iOS-Universal.ipa
+          name: Teleprompter-iOS-Universal-IPA
+          path: Teleprompter-iOS-Universal.ipa
 
       - name: Publish Direct .ipa to GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete v0.0.1 --yes || true
-          gh release create v0.0.1 FlowPrompt-iOS-Universal.ipa \
+          gh release create v0.0.1 Teleprompter-iOS-Universal.ipa \
             --title "Teleprompter v0.0.1 (Universal iOS & iPadOS IPA)" \
-            --notes "Unsigned .ipa build with embedded iOS & iPadOS AppIcon for SideStore, AltStore, Sideloadly, and Feather."
+            --notes "Unsigned .ipa build of Teleprompter v0.0.1 with live camera viewfinder, post-capture video editor & trimmer (Save to Photos / Files), interactive Home Screen widgets, 6 real-time themes, and embedded AppIcon."
