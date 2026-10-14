@@ -1,4 +1,4 @@
-name: Build Unsigned Teleprompter iOS IPA
+name: Build Unsigned Teleprompter iOS IPA 
 
 on:
   workflow_dispatch:
